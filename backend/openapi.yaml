@@ -1,0 +1,542 @@
+openapi: 3.0.0
+info:
+  title: Project, Sensor, and Data API
+  description: API for managing projects, sensors, and sensor data.
+  version: 1.0.0
+servers:
+  - url: http://your_domain/your_api_root/api.php # Ersetzen Sie dies durch die tatsächliche URL Ihrer API
+    description: Development server
+
+tags:
+  - name: Projects
+    description: Operations related to projects
+  - name: Sensors
+    description: Operations related to sensors within projects
+  - name: Data
+    description: Operations for submitting sensor data
+
+paths:
+  /api.php?resource=projects:
+    get:
+      tags:
+        - Projects
+      summary: Retrieve all projects or a single project by ID
+      operationId: getProjects
+      parameters:
+        - in: query
+          name: id
+          schema:
+            type: integer
+          description: Optional. The ID of the project to retrieve.
+      responses:
+        200:
+          description: A list of projects or a single project.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      records:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Project'
+                  - $ref: '#/components/schemas/Project'
+        404:
+          description: No projects found or project not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Database connection failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    post:
+      tags:
+        - Projects
+      summary: Create a new project
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                  description: The name of the project.
+                description:
+                  type: string
+                  maxLength: 255
+                  nullable: true
+                  description: A description of the project.
+                passphrase:
+                  type: string
+                  maxLength: 255
+                  nullable: true
+                  description: A passphrase for the project (consider hashing in production).
+      responses:
+        201:
+          description: Project was successfully created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  id:
+                    type: integer
+        400:
+          description: Incomplete data provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        503:
+          description: Unable to create project (service unavailable).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    put:
+      tags:
+        - Projects
+      summary: Update an existing project
+      operationId: updateProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - name
+              properties:
+                id:
+                  type: integer
+                  description: The ID of the project to update.
+                name:
+                  type: string
+                  maxLength: 100
+                  description: The new name of the project.
+                description:
+                  type: string
+                  maxLength: 255
+                  nullable: true
+                  description: The new description of the project.
+                passphrase:
+                  type: string
+                  maxLength: 255
+                  nullable: true
+                  description: The new passphrase for the project.
+      responses:
+        200:
+          description: Project was successfully updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          description: Incomplete data provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        404:
+          description: Project not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        503:
+          description: Unable to update project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    delete:
+      tags:
+        - Projects
+      summary: Delete a project by ID
+      operationId: deleteProject
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: The ID of the project to delete.
+      responses:
+        200:
+          description: Project was successfully deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          description: Missing ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        503:
+          description: Unable to delete project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /api.php?resource=sensors:
+    get:
+      tags:
+        - Sensors
+      summary: Retrieve all sensors, a single sensor by ID, or sensors by project ID
+      operationId: getSensors
+      parameters:
+        - in: query
+          name: id
+          schema:
+            type: integer
+          description: Optional. The ID of the sensor to retrieve.
+        - in: query
+          name: id_project
+          schema:
+            type: integer
+          description: Optional. The ID of the project to retrieve sensors for.
+      responses:
+        200:
+          description: A list of sensors or a single sensor.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      records:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Sensor'
+                  - $ref: '#/components/schemas/Sensor'
+        404:
+          description: No sensors found or sensor not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Database connection failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    post:
+      tags:
+        - Sensors
+      summary: Create a new sensor
+      operationId: createSensor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id_project
+                - name
+              properties:
+                id_project:
+                  type: integer
+                  description: The ID of the project this sensor belongs to.
+                name:
+                  type: string
+                  maxLength: 100
+                  description: The name of the sensor.
+                active:
+                  type: boolean
+                  default: true
+                  description: Whether the sensor is active.
+      responses:
+        201:
+          description: Sensor was successfully created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  id:
+                    type: integer
+        400:
+          description: Incomplete data provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        503:
+          description: Unable to create sensor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    put:
+      tags:
+        - Sensors
+      summary: Update an existing sensor
+      operationId: updateSensor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - id_project
+                - name
+              properties:
+                id:
+                  type: integer
+                  description: The ID of the sensor to update.
+                id_project:
+                  type: integer
+                  description: The ID of the project this sensor belongs to.
+                name:
+                  type: string
+                  maxLength: 100
+                  description: The new name of the sensor.
+                active:
+                  type: boolean
+                  default: true
+                  description: Whether the sensor is active.
+      responses:
+        200:
+          description: Sensor was successfully updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          description: Incomplete data provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        503:
+          description: Unable to update sensor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    delete:
+      tags:
+        - Sensors
+      summary: Delete a sensor by ID
+      operationId: deleteSensor
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: The ID of the sensor to delete.
+      responses:
+        200:
+          description: Sensor was successfully deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        400:
+          description: Missing ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        503:
+          description: Unable to delete sensor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /api.php?resource=data:
+    post:
+      tags:
+        - Data
+      summary: Submit new sensor data
+      operationId: createDataEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id_sensor
+                - value_date
+                - value
+              properties:
+                id_sensor:
+                  type: integer
+                  description: The ID of the sensor that recorded the data.
+                value_date:
+                  type: integer
+                  format: int64
+                  description: Tickcount (e.g., milliseconds since Unix epoch) when the value was recorded.
+                value:
+                  type: number
+                  format: float
+                  description: The recorded sensor value.
+      responses:
+        201:
+          description: Data entry was successfully created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  id:
+                    type: integer
+        400:
+          description: Incomplete or invalid data provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        503:
+          description: Unable to create data entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    get:
+      summary: Not allowed for data resource
+      operationId: getDataNotAllowed
+      responses:
+        405:
+          description: Method not allowed for data. Only POST is allowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    put:
+      summary: Not allowed for data resource
+      operationId: putDataNotAllowed
+      responses:
+        405:
+          description: Method not allowed for data. Only POST is allowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    delete:
+      summary: Not allowed for data resource
+      operationId: deleteDataNotAllowed
+      responses:
+        405:
+          description: Method not allowed for data. Only POST is allowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+components:
+  schemas:
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+        passphrase:
+          type: string
+          maxLength: 255
+          nullable: true
+      example:
+        id: 1
+        name: My Smart Home Project
+        description: Monitoring temperature and humidity.
+        passphrase: mysecret
+
+    Sensor:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        id_project:
+          type: integer
+          description: The ID of the project this sensor belongs to.
+        name:
+          type: string
+          maxLength: 100
+        active:
+          type: boolean
+          default: true
+      example:
+        id: 101
+        id_project: 1
+        name: Living Room Temp
+        active: true
+
+    DataEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        id_sensor:
+          type: integer
+        value_date:
+          type: integer
+          format: int64
+          description: Tickcount (e.g., milliseconds since Unix epoch)
+        value:
+          type: number
+          format: float
+        created:
+          type: integer
+          format: int64
+          readOnly: true
+          description: Automatically set tickcount (milliseconds since Unix epoch)
+      example:
+        id: 201
+        id_sensor: 101
+        value_date: 1678886400000 # Example timestamp
+        value: 22.8
+        created: 1678886400000
+
+    ErrorMessage:
+      type: object
+      properties:
+        message:
+          type: string
+      example:
+        message: Project not found.
+
+    SuccessMessage:
+      type: object
+      properties:
+        message:
+          type: string
+      example:
+        message: Project was successfully updated.
