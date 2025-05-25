@@ -4,7 +4,7 @@ info:
   description: API for managing projects, sensors, and sensor data.
   version: 1.0.0
 servers:
-  - url: http://your_domain/your_api_root/api.php # Ersetzen Sie dies durch die tatsächliche URL Ihrer API
+  - url: http://your_domain/your_api_root/api # WICHTIG: Pfad anpassen! Kein .php mehr!
     description: Development server
 
 tags:
@@ -16,34 +16,26 @@ tags:
     description: Operations for submitting sensor data
 
 paths:
-  /api.php?resource=projects:
+  /projects: # Neuer Endpunkt
     get:
       tags:
         - Projects
-      summary: Retrieve all projects or a single project by ID
+      summary: Retrieve all projects
       operationId: getProjects
-      parameters:
-        - in: query
-          name: id
-          schema:
-            type: integer
-          description: Optional. The ID of the project to retrieve.
       responses:
         200:
-          description: A list of projects or a single project.
+          description: A list of projects.
           content:
             application/json:
               schema:
-                oneOf:
-                  - type: object
-                    properties:
-                      records:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Project'
-                  - $ref: '#/components/schemas/Project'
+                type: object
+                properties:
+                  records:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
         404:
-          description: No projects found or project not found.
+          description: No projects found.
           content:
             application/json:
               schema:
@@ -71,17 +63,14 @@ paths:
                 name:
                   type: string
                   maxLength: 100
-                  description: The name of the project.
                 description:
                   type: string
                   maxLength: 255
                   nullable: true
-                  description: A description of the project.
                 passphrase:
                   type: string
                   maxLength: 255
                   nullable: true
-                  description: A passphrase for the project (consider hashing in production).
       responses:
         201:
           description: Project was successfully created.
@@ -106,11 +95,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
+
+  /projects/{id}: # Neuer Endpunkt mit Pfadparameter
+    get:
+      tags:
+        - Projects
+      summary: Retrieve a single project by ID
+      operationId: getProjectById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: The ID of the project to retrieve.
+      responses:
+        200:
+          description: A single project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        404:
+          description: Project not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Database connection failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
     put:
       tags:
         - Projects
       summary: Update an existing project
       operationId: updateProject
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: The ID of the project to update.
       requestBody:
         required: true
         content:
@@ -118,26 +147,19 @@ paths:
             schema:
               type: object
               required:
-                - id
                 - name
               properties:
-                id:
-                  type: integer
-                  description: The ID of the project to update.
                 name:
                   type: string
                   maxLength: 100
-                  description: The new name of the project.
                 description:
                   type: string
                   maxLength: 255
                   nullable: true
-                  description: The new description of the project.
                 passphrase:
                   type: string
                   maxLength: 255
                   nullable: true
-                  description: The new passphrase for the project.
       responses:
         200:
           description: Project was successfully updated.
@@ -169,7 +191,7 @@ paths:
       summary: Delete a project by ID
       operationId: deleteProject
       parameters:
-        - in: query
+        - in: path
           name: id
           required: true
           schema:
@@ -195,39 +217,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
 
-  /api.php?resource=sensors:
+  /sensors: # Neuer Endpunkt
     get:
       tags:
         - Sensors
-      summary: Retrieve all sensors, a single sensor by ID, or sensors by project ID
+      summary: Retrieve all sensors
       operationId: getSensors
-      parameters:
-        - in: query
-          name: id
-          schema:
-            type: integer
-          description: Optional. The ID of the sensor to retrieve.
-        - in: query
-          name: id_project
-          schema:
-            type: integer
-          description: Optional. The ID of the project to retrieve sensors for.
       responses:
         200:
-          description: A list of sensors or a single sensor.
+          description: A list of sensors.
           content:
             application/json:
               schema:
-                oneOf:
-                  - type: object
-                    properties:
-                      records:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Sensor'
-                  - $ref: '#/components/schemas/Sensor'
+                type: object
+                properties:
+                  records:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Sensor'
         404:
-          description: No sensors found or sensor not found.
+          description: No sensors found.
           content:
             application/json:
               schema:
@@ -259,11 +268,9 @@ paths:
                 name:
                   type: string
                   maxLength: 100
-                  description: The name of the sensor.
                 active:
                   type: boolean
                   default: true
-                  description: Whether the sensor is active.
       responses:
         201:
           description: Sensor was successfully created.
@@ -288,11 +295,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
+
+  /sensors/{id}: # Neuer Endpunkt mit Pfadparameter
+    get:
+      tags:
+        - Sensors
+      summary: Retrieve a single sensor by ID
+      operationId: getSensorById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: The ID of the sensor to retrieve.
+      responses:
+        200:
+          description: A single sensor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sensor'
+        404:
+          description: Sensor not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Database connection failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
     put:
       tags:
         - Sensors
       summary: Update an existing sensor
       operationId: updateSensor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: The ID of the sensor to update.
       requestBody:
         required: true
         content:
@@ -300,24 +347,18 @@ paths:
             schema:
               type: object
               required:
-                - id
                 - id_project
                 - name
               properties:
-                id:
-                  type: integer
-                  description: The ID of the sensor to update.
                 id_project:
                   type: integer
                   description: The ID of the project this sensor belongs to.
                 name:
                   type: string
                   maxLength: 100
-                  description: The new name of the sensor.
                 active:
                   type: boolean
                   default: true
-                  description: Whether the sensor is active.
       responses:
         200:
           description: Sensor was successfully updated.
@@ -343,7 +384,7 @@ paths:
       summary: Delete a sensor by ID
       operationId: deleteSensor
       parameters:
-        - in: query
+        - in: path
           name: id
           required: true
           schema:
@@ -369,7 +410,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
 
-  /api.php?resource=data:
+  /sensors/project/{id_project}: # Neuer Endpunkt für Sensoren nach Projekt
+    get:
+      tags:
+        - Sensors
+      summary: Retrieve all sensors for a specific project
+      operationId: getSensorsByProject
+      parameters:
+        - in: path
+          name: id_project
+          required: true
+          schema:
+            type: integer
+          description: The ID of the project to retrieve sensors for.
+      responses:
+        200:
+          description: A list of sensors for the specified project.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  records:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Sensor'
+        404:
+          description: No sensors found for this project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        500:
+          description: Database connection failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /data: # Neuer Endpunkt
     post:
       tags:
         - Data
@@ -421,6 +500,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
+    # Die anderen Methoden sind hier weiterhin nicht erlaubt und werden entsprechend dokumentiert.
     get:
       summary: Not allowed for data resource
       operationId: getDataNotAllowed

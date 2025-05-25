@@ -1,0 +1,16 @@
+# .htaccess
+RewriteEngine On
+RewriteBase /your_api_root/ # WICHTIG: Pfad anpassen!
+
+# Nur wenn die angeforderte Datei/Ordner nicht existiert
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Die Umleitungsregeln
+RewriteRule ^api/(projects|sensors|data)/?$ api.php?resource=$1 [L,QSA]
+RewriteRule ^api/(projects|sensors|data)/([0-9]+)/?$ api.php?resource=$1&id=$2 [L,QSA]
+RewriteRule ^api/(sensors)/project/([0-9]+)/?$ api.php?resource=$1&id_project=$2 [L,QSA] # Für Sensoren nach Projekt-ID
+
+# Optional: Weiterleitung bei Zugriff auf api.php direkt, um die "sauberen" URLs zu erzwingen
+# RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /[^/]+/api\.php\?resource=([^&\ ]+)
+# RewriteRule ^api\.php$ /your_api_root/api/%1 [R=301,L,NC]
