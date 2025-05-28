@@ -64,16 +64,13 @@ switch ($resource) {
         break;
 }
 
-// Die Funktionen handle_projects_request, handle_sensors_request, handle_data_request
-// bleiben so wie in der vorherigen Antwort, da sie nun die Parameter aus $_GET
-// oder dem Request Body erhalten.
-function handle_projects_request($method, $data, $project) {
+function handle_projects_request($method, $data, $project): void {
     switch ($method) {
         case 'POST': // Neues Projekt anlegen
             if (!empty($data->name)) {
                 $project->name = $data->name;
-                $project->description = isset($data->description) ? $data->description : null;
-                $project->passphrase = isset($data->passphrase) ? $data->passphrase : null;
+                $project->description = $data->description ?? null;
+                $project->passphrase = $data->passphrase ?? null;
 
                 if ($project->create()) {
                     http_response_code(201);
@@ -96,7 +93,6 @@ function handle_projects_request($method, $data, $project) {
                         "id" => $project->id,
                         "name" => $project->name,
                         "description" => $project->description,
-                        "passphrase" => $project->passphrase
                     );
                     http_response_code(200);
                     echo json_encode($project_arr);
@@ -115,8 +111,7 @@ function handle_projects_request($method, $data, $project) {
                         $project_item = array(
                             "id" => $Id,
                             "name" => $Name,
-                            "description" => $Description,
-                            "passphrase" => $Passphrase
+                            "description" => $Description
                         );
                         array_push($projects_arr["records"], $project_item);
                     }
@@ -134,8 +129,8 @@ function handle_projects_request($method, $data, $project) {
             if (isset($_GET['id']) && !empty($data->name)) { // Verwenden Sie $_GET['id']
                 $project->id = $_GET['id'];
                 $project->name = $data->name;
-                $project->description = isset($data->description) ? $data->description : null;
-                $project->passphrase = isset($data->passphrase) ? $data->passphrase : null;
+                $project->description = $data->description ?? null;
+                $project->passphrase = $data->passphrase ?? null;
 
                 if ($project->update()) {
                     http_response_code(200);
@@ -217,7 +212,6 @@ function handle_sensors_request($method, $data, $sensor) {
                 $stmt = $sensor->read_by_project($_GET['id_project']);
                 $num = $stmt->rowCount();
                 if ($num > 0) {
-                    $sensors_arr = array();
                     $sensors_arr["records"] = array();
                     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                         extract($row);
@@ -233,14 +227,13 @@ function handle_sensors_request($method, $data, $sensor) {
                     echo json_encode($sensors_arr);
                 } else {
                     http_response_code(404);
-                    echo json_encode(array("message" => "No sensors found for this project."));
+                    echo json_encode(array("message" => "No sensors found."));
                 }
             } else {
                 // Alle Sensoren abfragen
                 $stmt = $sensor->read_all();
                 $num = $stmt->rowCount();
                 if ($num > 0) {
-                    $sensors_arr = array();
                     $sensors_arr["records"] = array();
                     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                         extract($row);
@@ -266,7 +259,7 @@ function handle_sensors_request($method, $data, $sensor) {
                 $sensor->id = $data->id;
                 $sensor->id_project = $data->id_project;
                 $sensor->name = $data->name;
-                $sensor->active = isset($data->active) ? $data->active : true;
+                $sensor->active = $data->active ?? true;
 
                 if ($sensor->update()) {
                     http_response_code(200);

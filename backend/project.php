@@ -5,7 +5,7 @@ require_once 'db_config.php';
 
 class Project {
     private $conn;
-    private $table_name = "Projects";
+    private string $table_name = "Projects";
 
     public $id;
     public $name;
@@ -16,7 +16,8 @@ class Project {
         $this->conn = $db;
     }
 
-    public function create() {
+    public function create(): bool
+    {
         $query = "INSERT INTO " . $this->table_name . " (Name, Description, Passphrase) VALUES (:name, :description, :passphrase)";
         $stmt = $this->conn->prepare($query);
 
@@ -35,8 +36,9 @@ class Project {
         return false;
     }
 
-    public function read_one() {
-        $query = "SELECT Id, Name, Description, Passphrase FROM " . $this->table_name . " WHERE Id = ? LIMIT 0,1";
+    public function read_one(): bool
+    {
+        $query = "SELECT Id, Name, Description FROM " . $this->table_name . " WHERE Id = ? LIMIT 0,1";
         $stmt = $this->conn->prepare($query);
         $stmt->bindParam(1, $this->id);
         $stmt->execute();
@@ -46,20 +48,20 @@ class Project {
         if ($row) {
             $this->name = $row['Name'];
             $this->description = $row['Description'];
-            $this->passphrase = $row['Passphrase'];
             return true;
         }
         return false;
     }
 
     public function read_all() {
-        $query = "SELECT Id, Name, Description, Passphrase FROM " . $this->table_name . " ORDER BY Id DESC";
+        $query = "SELECT Id, Name, Description FROM " . $this->table_name . " ORDER BY Id DESC";
         $stmt = $this->conn->prepare($query);
         $stmt->execute();
         return $stmt;
     }
 
-    public function update() {
+    public function update(): bool
+    {
         $query = "UPDATE " . $this->table_name . " SET Name = :name, Description = :description, Passphrase = :passphrase WHERE Id = :id";
         $stmt = $this->conn->prepare($query);
 
@@ -79,7 +81,8 @@ class Project {
         return false;
     }
 
-    public function delete() {
+    public function delete(): bool
+    {
         $query = "DELETE FROM " . $this->table_name . " WHERE Id = ?";
         $stmt = $this->conn->prepare($query);
         $this->id = htmlspecialchars(strip_tags($this->id));
@@ -91,4 +94,3 @@ class Project {
         return false;
     }
 }
-?>

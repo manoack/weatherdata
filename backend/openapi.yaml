@@ -33,7 +33,7 @@ paths:
                   records:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Project'
+                      $ref: '#/components/schemas/ProjectWithoutPassphrase'
         404:
           description: No projects found.
           content:
@@ -115,7 +115,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Project'
+                $ref: '#/components/schemas/ProjectWithoutPassphrase'
         404:
           description: Project not found.
           content:
@@ -556,6 +556,24 @@ components:
         name: My Smart Home Project
         description: Monitoring temperature and humidity.
         passphrase: mysecret
+
+    ProjectWithoutPassphrase:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+      example:
+        id: 1
+        name: My Smart Home Project
+        description: Monitoring temperature and humidity.
 
     Sensor:
       type: object
