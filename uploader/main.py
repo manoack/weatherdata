@@ -8,6 +8,46 @@ import network
 import urequests  # Import für HTTP-Anfragen
 import json  # Import für JSON-Serialisierung
 
+# --- Onboard LED Konfiguration ---
+# Die Onboard-LED auf dem Raspberry Pi Pico W ist normalerweise mit 'LED' oder GPIO 25 verbunden.
+ONBOARD_LED_PIN = 'LED'
+onboard_led = None
+try:
+    onboard_led = machine.Pin(ONBOARD_LED_PIN, machine.Pin.OUT)
+except Exception as e:
+    print(f"Warnung: Onboard-LED konnte nicht initialisiert werden (Nicht-Pico W oder Pin-Fehler?): {e}")
+
+
+# --- Helper-Funktionen für LED-Blinken ---
+def blink_led(led_pin, count, short_ms=100):
+    """
+    Lässt die LED eine bestimmte Anzahl von Malen kurz blinken.
+    :param led_pin: Das Pin-Objekt der LED.
+    :param count: Anzahl der Blinkvorgänge.
+    :param short_ms: Dauer (ms) für An/Aus jedes kurzen Blinkens.
+    """
+    if led_pin is None:
+        return
+    for i in range(count):
+        led_pin.value(1)  # LED einschalten
+        time.sleep_ms(short_ms)
+        led_pin.value(0)  # LED ausschalten
+        if i < count - 1:  # Pause zwischen den Blinkvorgängen, aber nicht nach dem letzten
+            time.sleep_ms(short_ms)
+
+
+def long_blink_led(led_pin, duration_ms=1000):
+    """
+    Lässt die LED einmal lange blinken.
+    :param led_pin: Das Pin-Objekt der LED.
+    :param duration_ms: Dauer (ms) für das lange Blinken.
+    """
+    if led_pin is None:
+        return
+    led_pin.value(1)  # LED einschalten
+    time.sleep_ms(duration_ms)
+    led_pin.value(0)  # LED ausschalten
+
 
 # --- Funktion zum Laden der Geheimnisse aus secrets.json ---
 def load_secrets(filename="secrets.json"):
@@ -29,18 +69,15 @@ def load_secrets(filename="secrets.json"):
 
 # Lade die Geheimnisse
 secrets = load_secrets()
+blink_led(onboard_led, 1)  # Einmal blinken beim Start
 
 # --- WLAN Konfiguration (aus secrets.json) ---
-# Stellen Sie sicher, dass diese Schlüssel in Ihrer secrets.json vorhanden sind.
 WLAN_SSID = secrets.get("WLAN_SSID")
 WLAN_PASSWORD = secrets.get("WLAN_PASSWORD")
 
 # --- API Konfiguration (aus secrets.json) ---
-# Stellen Sie sicher, dass diese Schlüssel in Ihrer secrets.json vorhanden sind.
 API_BASE_URL = secrets.get("API_BASE_URL")
-PROJECT_PASSPHRASE = secrets.get("PROJECT_PASSPHRASE", "")  # Standardmäßig leer, falls nicht in secrets.json
-# Das SENSOR_ID_MAPPING wird ebenfalls aus secrets.json geladen.
-# Beachten Sie, dass JSON-Keys Strings sind. Wir müssen die Keys ggf. zu int konvertieren.
+PROJECT_PASSPHRASE = secrets.get("PROJECT_PASSPHRASE", "")
 SENSOR_ID_MAPPING = {int(k): v for k, v in secrets.get("SENSOR_ID_MAPPING", {}).items()}
 
 # --- Retry-Konfiguration für API-Requests ---
@@ -48,9 +85,9 @@ MAX_API_RETRIES = 5  # Maximale Anzahl an Wiederholungsversuchen für API-Reques
 RETRY_DELAY_SECONDS = 5  # Wartezeit zwischen den Wiederholungsversuchen
 
 # --- Konfiguration der Sensoren ---
-SENSOR_PINS = [3, 4, 7]  # GPIO-Pins, an die die Sensoren angeschlossen sind (z.B. GP0, GP1, GP2)
-MESSINTERVALL_SEKUNDEN = 5  # X Sekunden: Intervall zum Nehmen der einzelnen Messwerte
-SPEICHERINTERVALL_SEKUNDEN = 60  # Y Sekunden: Intervall zum Speichern des Mittelwerts und zur Ausgabe
+SENSOR_PINS = [3, 4, 7]  # GPIO-Pins, an die die Sensoren angeschlossen sind
+MESSINTERVALL_SEKUNDEN = 300  # X Sekunden: Intervall zum Nehmen der einzelnen Messwerte
+SPEICHERINTERVALL_SEKUNDEN = 1800  # Y Sekunden: Intervall zum Speichern des Mittelwerts und zur Ausgabe
 DATEINAME = "temperatur_log.csv"
 
 
@@ -87,6 +124,7 @@ def connect_to_wlan(ssid, password):
     if wlan.isconnected():
         print("\nErfolgreich mit WLAN verbunden!")
         print("IP-Adresse:", wlan.ifconfig()[0])
+        blink_led(onboard_led, 2)  # Zweimal blinken bei erfolgreicher WLAN-Verbindung
         try:
             import ntptime
             ntptime.host = 'pool.ntp.org'
@@ -178,12 +216,9 @@ while True:
         try:
             with open(DATEINAME, 'a') as f:
                 timestamp = time.localtime()
-                # Timestamp für CSV-Datei
                 timestamp_str = f"{timestamp[0]:04d}-{timestamp[1]:02d}-{timestamp[2]:02d} {timestamp[3]:02d}:{timestamp[4]:02d}:{timestamp[5]:02d}"
                 csv_line = timestamp_str
 
-                # Timestamp für API-Request (Millisekunden seit Unix-Epoche)
-                # Nur synchronisierte Zeit verwenden, wenn WLAN verbunden ist
                 api_value_date = int(time.time() * 1000) if wlan_connection and wlan_connection.isconnected() else 0
 
                 for sensor_info in sensoren:
@@ -199,31 +234,27 @@ while True:
                         # --- Daten an API senden (mit Wiederholungsversuchen) ---
                         if sensor_api_id is None:
                             print(f"API: Keine Sensor-ID für GP{sensor_pin} im Mapping gefunden. Daten nicht gesendet.")
-                            sensor_info["messwerte"] = []  # Messwerte zurücksetzen
-                            continue  # Gehe zum nächsten Sensor
+                            sensor_info["messwerte"] = []
+                            continue
 
                         api_sent_successfully = False
                         retry_count = 0
                         while retry_count < MAX_API_RETRIES and not api_sent_successfully:
-                            # 1. Sicherstellen, dass WLAN verbunden ist
-                            # Versuche, WLAN zu rekonnektieren, falls nicht verbunden
                             if not (wlan_connection and wlan_connection.isconnected()):
                                 print(
                                     f"WLAN nicht verbunden. Versuche erneut zu verbinden (Versuch {retry_count + 1}/{MAX_API_RETRIES})...")
-                                # Erneuter Verbindungsversuch
                                 wlan_connection = connect_to_wlan(WLAN_SSID, WLAN_PASSWORD)
                                 if not (wlan_connection and wlan_connection.isconnected()):
                                     print(
                                         f"WLAN-Verbindung nach {retry_count + 1} Versuchen fehlgeschlagen. Überspringe API-Request für diesen Zyklus.")
-                                    time.sleep(RETRY_DELAY_SECONDS)  # Warte, bevor der nächste Versuch gestartet wird
+                                    time.sleep(RETRY_DELAY_SECONDS)
                                     retry_count += 1
-                                    continue  # Gehe zum nächsten Wiederholungsversuch in der Retry-Schleife
+                                    continue
 
-                            # WLAN ist verbunden, versuche API-Request
                             if not API_BASE_URL:
                                 print("API-Fehler: API_BASE_URL in secrets.json fehlt. Daten nicht gesendet.")
-                                api_sent_successfully = True  # Markiere als "erledigt", um Endlosschleife zu vermeiden
-                                break  # Beende die Retry-Schleife
+                                api_sent_successfully = True
+                                break
 
                             try:
                                 payload = {
@@ -239,13 +270,14 @@ while True:
                                     print(
                                         f"API: Daten für Sensor GP{sensor_pin} erfolgreich gesendet. Antwort: {response.json()}")
                                     api_sent_successfully = True
+                                    blink_led(onboard_led, 3)  # Dreimal blinken bei erfolgreichem API-Request
                                 else:
                                     print(
                                         f"API-Fehler für Sensor GP{sensor_pin}: Status {response.status_code}, Antwort: {response.text}")
                                     print(
                                         f"Versuche erneut in {RETRY_DELAY_SECONDS} Sekunden (Versuch {retry_count + 1}/{MAX_API_RETRIES})...")
                                     time.sleep(RETRY_DELAY_SECONDS)
-                                response.close()  # Wichtig, um Ressourcen freizugeben
+                                response.close()
                             except Exception as api_e:
                                 print(f"Fehler beim Senden der API-Daten für Sensor GP{sensor_pin}: {api_e}")
                                 print(
@@ -257,12 +289,14 @@ while True:
                         if not api_sent_successfully:
                             print(
                                 f"API: Daten für Sensor GP{sensor_pin} konnten nach {MAX_API_RETRIES} Versuchen nicht gesendet werden.")
+                            long_blink_led(
+                                onboard_led)  # Einmal lang blinken bei fehlgeschlagenem API-Request (nach allen Retries)
                         # --- Ende API-Daten senden ---
 
-                        sensor_info["messwerte"] = []  # Messwerte zurücksetzen
+                        sensor_info["messwerte"] = []
                     else:
                         print(f"Sensor an GP{sensor_pin}: Keine neuen Messwerte seit letzter Speicherung.")
-                        csv_line += ","  # Leerer Eintrag in CSV, wenn keine Messwerte
+                        csv_line += ","
                 f.write(csv_line + "\n")
             print(f"Daten in '{DATEINAME}' gespeichert.")
         except Exception as e:
@@ -270,3 +304,4 @@ while True:
         letzter_speicherzeitpunkt = aktueller_zeitpunkt
 
     time.sleep(1)  # Kurze Pause, um CPU-Auslastung zu reduzieren und andere Aufgaben zu ermöglichen
+
