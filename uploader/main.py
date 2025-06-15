@@ -303,5 +303,6 @@ while True:
             print(f"Fehler beim Schreiben der CSV-Datei: {e}")
         letzter_speicherzeitpunkt = aktueller_zeitpunkt
 
+
     time.sleep(1)  # Kurze Pause, um CPU-Auslastung zu reduzieren und andere Aufgaben zu ermöglichen
 
