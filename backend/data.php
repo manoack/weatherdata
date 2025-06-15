@@ -4,14 +4,17 @@
 require_once 'db_config.php';
 
 class Data {
+    public $id;
+
     private $conn;
     private $table_name = "Data";
 
-    public $id;
     public $id_sensor;
     public $value_date;
+
     public $value;
-    public $created;
+
+    public $passphrase;
 
     public function __construct($db) {
         $this->conn = $db;
@@ -19,23 +22,32 @@ class Data {
 
     // Nur das Anlegen neuer Daten ist erlaubt
     public function create() {
-        $query = "INSERT INTO " . $this->table_name . " (IdSensor, ValueDate, Value) VALUES (:id_sensor, :value_date, :value)";
+        $query =
+            "INSERT INTO " . $this->table_name . " (IdSensor, ValueDate, Value) " .
+            "(Select :id_sensor IdSensor , :value_date ValueDate, :value Value " .
+            "FROM Projects p JOIN Sensors s ON s.IdProject = p.Id ".
+            "WHERE s.Id = :id_sensor AND p.Passphrase = :passphrase) ".
+            "RETURNING Id;";
         $stmt = $this->conn->prepare($query);
 
-        $this->id_sensor = htmlspecialchars(strip_tags($this->id_sensor));
-        // ValueDate und Value brauchen keine htmlspecialchars/strip_tags, da sie numerisch sein sollten
-        $this->value_date = $this->value_date;
-        $this->value = $this->value;
+        // $this->id_sensor = $this->id_sensor;
+        // $this->value_date = $this->value_date;
+        $this->value = htmlspecialchars($this->value);
+        $this->passphrase = htmlspecialchars($this->passphrase);
 
         // Validierung für numerische Werte könnte hier hinzugefügt werden
 
-        $stmt->bindParam(":id_sensor", $this->id_sensor);
-        $stmt->bindParam(":value_date", $this->value_date);
+        $stmt->bindParam(":id_sensor", $this->id_sensor, PDO::PARAM_INT);
+        $stmt->bindParam(":value_date", $this->value_date, PDO::PARAM_INT);
         $stmt->bindParam(":value", $this->value);
+        $stmt->bindParam(":passphrase", $this->passphrase, PDO::PARAM_STR);
 
         if ($stmt->execute()) {
-            $this->id = $this->conn->lastInsertId();
-            return true;
+            $row = $stmt->fetch();
+            if ($row) {
+                $this->id = $row["Id"];
+                return true;
+            }
         }
         return false;
     }

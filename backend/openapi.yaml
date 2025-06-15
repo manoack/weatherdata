@@ -464,6 +464,7 @@ paths:
                 - id_sensor
                 - value_date
                 - value
+                - passphrase
               properties:
                 id_sensor:
                   type: integer
@@ -476,6 +477,10 @@ paths:
                   type: number
                   format: float
                   description: The recorded sensor value.
+                passphrase:
+                  type: string
+                  maxLength: 255
+                  nullable: true
       responses:
         201:
           description: Data entry was successfully created.

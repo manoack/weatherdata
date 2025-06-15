@@ -300,10 +300,11 @@ function handle_sensors_request($method, $data, $sensor) {
 function handle_data_request($method, $data, $data_obj) {
     switch ($method) {
         case 'POST': // Neue Daten anlegen
-            if (!empty($data->id_sensor) && isset($data->value_date) && isset($data->value)) {
+            if (isset($data->id_sensor) && isset($data->value_date) && isset($data->value)) {
                 $data_obj->id_sensor = $data->id_sensor;
                 $data_obj->value_date = $data->value_date;
                 $data_obj->value = $data->value;
+                $data_obj->passphrase = $data->passphrase;
 
                 // Zusätzliche Validierung für value_date (BIGINT) und value (FLOAT)
                 if (!is_numeric($data_obj->value_date) || !is_numeric($data_obj->value)) {
