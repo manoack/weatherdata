@@ -5,8 +5,9 @@ import time
 import uos
 import sys
 import network
-import urequests # Import für HTTP-Anfragen
-import json      # Import für JSON-Serialisierung
+import urequests  # Import für HTTP-Anfragen
+import json  # Import für JSON-Serialisierung
+
 
 # --- Funktion zum Laden der Geheimnisse aus secrets.json ---
 def load_secrets(filename="secrets.json"):
@@ -25,6 +26,7 @@ def load_secrets(filename="secrets.json"):
         print(f"Ein unerwarteter Fehler beim Laden von '{filename}' ist aufgetreten: {e}")
         sys.exit()
 
+
 # Lade die Geheimnisse
 secrets = load_secrets()
 
@@ -36,17 +38,21 @@ WLAN_PASSWORD = secrets.get("WLAN_PASSWORD")
 # --- API Konfiguration (aus secrets.json) ---
 # Stellen Sie sicher, dass diese Schlüssel in Ihrer secrets.json vorhanden sind.
 API_BASE_URL = secrets.get("API_BASE_URL")
-PROJECT_PASSPHRASE = secrets.get("PROJECT_PASSPHRASE", "") # Standardmäßig leer, falls nicht in secrets.json
+PROJECT_PASSPHRASE = secrets.get("PROJECT_PASSPHRASE", "")  # Standardmäßig leer, falls nicht in secrets.json
 # Das SENSOR_ID_MAPPING wird ebenfalls aus secrets.json geladen.
 # Beachten Sie, dass JSON-Keys Strings sind. Wir müssen die Keys ggf. zu int konvertieren.
 SENSOR_ID_MAPPING = {int(k): v for k, v in secrets.get("SENSOR_ID_MAPPING", {}).items()}
 
+# --- Retry-Konfiguration für API-Requests ---
+MAX_API_RETRIES = 5  # Maximale Anzahl an Wiederholungsversuchen für API-Requests
+RETRY_DELAY_SECONDS = 5  # Wartezeit zwischen den Wiederholungsversuchen
 
 # --- Konfiguration der Sensoren ---
-SENSOR_PINS = [3, 4, 7]           # GPIO-Pins, an die die Sensoren angeschlossen sind (z.B. GP0, GP1, GP2)
-MESSINTERVALL_SEKUNDEN = 5        # X Sekunden: Intervall zum Nehmen der einzelnen Messwerte
-SPEICHERINTERVALL_SEKUNDEN = 60   # Y Sekunden: Intervall zum Speichern des Mittelwerts und zur Ausgabe
+SENSOR_PINS = [3, 4, 7]  # GPIO-Pins, an die die Sensoren angeschlossen sind (z.B. GP0, GP1, GP2)
+MESSINTERVALL_SEKUNDEN = 5  # X Sekunden: Intervall zum Nehmen der einzelnen Messwerte
+SPEICHERINTERVALL_SEKUNDEN = 60  # Y Sekunden: Intervall zum Speichern des Mittelwerts und zur Ausgabe
 DATEINAME = "temperatur_log.csv"
+
 
 # --- Funktion zur WLAN-Verbindung ---
 def connect_to_wlan(ssid, password):
@@ -56,7 +62,7 @@ def connect_to_wlan(ssid, password):
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    
+
     if wlan.isconnected():
         print("Bereits mit WLAN verbunden. IP-Adresse:", wlan.ifconfig()[0])
         return wlan
@@ -77,7 +83,7 @@ def connect_to_wlan(ssid, password):
             print(f"Status: {status}...", end="")
         time.sleep(2)
         attempts += 1
-    
+
     if wlan.isconnected():
         print("\nErfolgreich mit WLAN verbunden!")
         print("IP-Adresse:", wlan.ifconfig()[0])
@@ -102,6 +108,7 @@ def connect_to_wlan(ssid, password):
         else:
             print(f"Unbekannter Fehlerstatus: {final_status}")
     return wlan
+
 
 # --- WLAN verbinden ---
 wlan_connection = connect_to_wlan(WLAN_SSID, WLAN_PASSWORD)
@@ -142,7 +149,8 @@ except (OSError, Exception):
 letzter_messzeitpunkt = time.time()
 letzter_speicherzeitpunkt = time.time()
 
-print(f"Starte Temperaturmessung. Messintervall: {MESSINTERVALL_SEKUNDEN}s, Speicherintervall: {SPEICHERINTERVALL_SEKUNDEN}s.")
+print(
+    f"Starte Temperaturmessung. Messintervall: {MESSINTERVALL_SEKUNDEN}s, Speicherintervall: {SPEICHERINTERVALL_SEKUNDEN}s.")
 
 while True:
     aktueller_zeitpunkt = time.time()
@@ -176,23 +184,46 @@ while True:
 
                 # Timestamp für API-Request (Millisekunden seit Unix-Epoche)
                 # Nur synchronisierte Zeit verwenden, wenn WLAN verbunden ist
-                api_value_date = int(time.time() * 1000) if wlan_connection and wlan_connection.isconnected() else 0 # 0 oder Fehlerwert, wenn keine synchrone Zeit
+                api_value_date = int(time.time() * 1000) if wlan_connection and wlan_connection.isconnected() else 0
 
                 for sensor_info in sensoren:
                     sensor_pin = sensor_info['pin']
-                    # SENSOR_ID_MAPPING hat jetzt Integer-Schlüssel, nachdem sie aus JSON konvertiert wurden
                     sensor_api_id = SENSOR_ID_MAPPING.get(sensor_pin)
 
                     if sensor_info["messwerte"]:
                         mittelwert = sum(sensor_info["messwerte"]) / len(sensor_info["messwerte"])
-                        print(f"Sensor an GP{sensor_pin} - Mittelwert ({len(sensor_info['messwerte'])} Messungen): {mittelwert:.2f} °C")
+                        print(
+                            f"Sensor an GP{sensor_pin} - Mittelwert ({len(sensor_info['messwerte'])} Messungen): {mittelwert:.2f} °C")
                         csv_line += f",{mittelwert:.2f}"
-                        
-                        # --- Daten an API senden ---
-                        if wlan_connection and wlan_connection.isconnected() and sensor_api_id is not None:
+
+                        # --- Daten an API senden (mit Wiederholungsversuchen) ---
+                        if sensor_api_id is None:
+                            print(f"API: Keine Sensor-ID für GP{sensor_pin} im Mapping gefunden. Daten nicht gesendet.")
+                            sensor_info["messwerte"] = []  # Messwerte zurücksetzen
+                            continue  # Gehe zum nächsten Sensor
+
+                        api_sent_successfully = False
+                        retry_count = 0
+                        while retry_count < MAX_API_RETRIES and not api_sent_successfully:
+                            # 1. Sicherstellen, dass WLAN verbunden ist
+                            # Versuche, WLAN zu rekonnektieren, falls nicht verbunden
+                            if not (wlan_connection and wlan_connection.isconnected()):
+                                print(
+                                    f"WLAN nicht verbunden. Versuche erneut zu verbinden (Versuch {retry_count + 1}/{MAX_API_RETRIES})...")
+                                # Erneuter Verbindungsversuch
+                                wlan_connection = connect_to_wlan(WLAN_SSID, WLAN_PASSWORD)
+                                if not (wlan_connection and wlan_connection.isconnected()):
+                                    print(
+                                        f"WLAN-Verbindung nach {retry_count + 1} Versuchen fehlgeschlagen. Überspringe API-Request für diesen Zyklus.")
+                                    time.sleep(RETRY_DELAY_SECONDS)  # Warte, bevor der nächste Versuch gestartet wird
+                                    retry_count += 1
+                                    continue  # Gehe zum nächsten Wiederholungsversuch in der Retry-Schleife
+
+                            # WLAN ist verbunden, versuche API-Request
                             if not API_BASE_URL:
-                                print("API-Fehler: API_BASE_URL in secrets.json fehlt.")
-                                continue # Überspringe diesen Sensor und gehe zum nächsten
+                                print("API-Fehler: API_BASE_URL in secrets.json fehlt. Daten nicht gesendet.")
+                                api_sent_successfully = True  # Markiere als "erledigt", um Endlosschleife zu vermeiden
+                                break  # Beende die Retry-Schleife
 
                             try:
                                 payload = {
@@ -203,28 +234,39 @@ while True:
                                 }
                                 headers = {'Content-Type': 'application/json'}
                                 response = urequests.post(API_BASE_URL, headers=headers, data=json.dumps(payload))
-                                
+
                                 if response.status_code == 201:
-                                    print(f"API: Daten für Sensor GP{sensor_pin} erfolgreich gesendet. Antwort: {response.json()}")
+                                    print(
+                                        f"API: Daten für Sensor GP{sensor_pin} erfolgreich gesendet. Antwort: {response.json()}")
+                                    api_sent_successfully = True
                                 else:
-                                    print(f"API-Fehler für Sensor GP{sensor_pin}: Status {response.status_code}, Antwort: {response.text}")
-                                response.close()
+                                    print(
+                                        f"API-Fehler für Sensor GP{sensor_pin}: Status {response.status_code}, Antwort: {response.text}")
+                                    print(
+                                        f"Versuche erneut in {RETRY_DELAY_SECONDS} Sekunden (Versuch {retry_count + 1}/{MAX_API_RETRIES})...")
+                                    time.sleep(RETRY_DELAY_SECONDS)
+                                response.close()  # Wichtig, um Ressourcen freizugeben
                             except Exception as api_e:
                                 print(f"Fehler beim Senden der API-Daten für Sensor GP{sensor_pin}: {api_e}")
-                        elif sensor_api_id is None:
-                            print(f"API: Keine Sensor-ID für GP{sensor_pin} im Mapping gefunden. Daten nicht gesendet.")
-                        else:
-                            print(f"API: Keine WLAN-Verbindung aktiv. Daten für Sensor GP{sensor_pin} nicht gesendet.")
+                                print(
+                                    f"Versuche erneut in {RETRY_DELAY_SECONDS} Sekunden (Versuch {retry_count + 1}/{MAX_API_RETRIES})...")
+                                time.sleep(RETRY_DELAY_SECONDS)
+
+                            retry_count += 1
+
+                        if not api_sent_successfully:
+                            print(
+                                f"API: Daten für Sensor GP{sensor_pin} konnten nach {MAX_API_RETRIES} Versuchen nicht gesendet werden.")
                         # --- Ende API-Daten senden ---
 
-                        sensor_info["messwerte"] = [] # Messwerte zurücksetzen
+                        sensor_info["messwerte"] = []  # Messwerte zurücksetzen
                     else:
                         print(f"Sensor an GP{sensor_pin}: Keine neuen Messwerte seit letzter Speicherung.")
-                        csv_line += "," # Leerer Eintrag in CSV, wenn keine Messwerte
+                        csv_line += ","  # Leerer Eintrag in CSV, wenn keine Messwerte
                 f.write(csv_line + "\n")
             print(f"Daten in '{DATEINAME}' gespeichert.")
         except Exception as e:
             print(f"Fehler beim Schreiben der CSV-Datei: {e}")
         letzter_speicherzeitpunkt = aktueller_zeitpunkt
 
-    time.sleep(1) # Kurze Pause, um CPU-Auslastung zu reduzieren und andere Aufgaben zu ermöglichen
+    time.sleep(1)  # Kurze Pause, um CPU-Auslastung zu reduzieren und andere Aufgaben zu ermöglichen
